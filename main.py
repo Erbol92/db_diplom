@@ -4,26 +4,9 @@ from telebot import types, TeleBot, custom_filters
 from telebot.storage import StateMemoryStorage
 from telebot.handler_backends import State, StatesGroup
 from models import *
-
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy import or_
-import pandas as pd
 
-DSN = "postgresql://postgres:postgres@localhost:5432/translate_db"
-engine = sq.create_engine(DSN)
 
-drop_tables(engine)
-create_tables(engine)
-
-csv_files = ['enword.csv', 'ruword.csv']
-for file in csv_files:
-    df = pd.read_csv(file)
-    df.to_sql(file.split('.')[0], con=engine, if_exists='append', index=False)
-    print(f"Данные успешно загружены в таблицу `{file.split('.')[0]}`.")
-
-# сессия
-Session = sessionmaker(bind=engine)
-session = Session()
 print('Start telegram bot...')
 
 state_storage = StateMemoryStorage()
@@ -170,16 +153,26 @@ def message_reply(message):
         if state == 'add_word':
             text = message.text.split(' ')
             hint = f'слово {text[0]}/{text[1]} добавлено'
-            print(text)
             user = session.query(User).\
                 filter(User.tg_id == message.chat.id).first()
-            print(user)
-            obj = RuWord(title=text[0], true_translate=text[1])
-            print(obj)
-            user.words.append(obj)
-            session.add(user)
-            session.commit()
-            data['add_word'] = ''
+            if user:
+                # Создание нового объекта RuWord
+                if session.query(RuWord).filter(RuWord.title==text[0]).first():
+                obj = RuWord(title=text[0], true_translate=text[1])
+                # Добавление объекта RuWord в сессию
+                session.add(obj)  # Здесь добавляем сам объект, а не его id
+                # Добавление нового слова в отношение words пользователя
+                user.words.append(obj)
+                # Фиксация изменений
+                try:
+                    session.commit()
+                except Exception as e:
+                    print(f"Ошибка при сохранении данных: {e}")
+                    session.rollback()  # Откат изменений в случае ошибки
+                    print("Данные успешно добавлены.")
+            else:
+                print("Пользователь не найден.")
+            data.clear()
         if text == target_word:
             hint = show_target(data)
             hint_text = ["Отлично!❤", hint]
@@ -188,6 +181,7 @@ def message_reply(message):
             add_word_btn = types.KeyboardButton(Command.ADD_WORD)
             delete_word_btn = types.KeyboardButton(Command.DELETE_WORD)
             buttons.extend([next_btn, add_word_btn, delete_word_btn])
+            data.clear()
         else:
             for btn in buttons:
                 if btn.text == text:
