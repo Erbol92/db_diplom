@@ -157,19 +157,19 @@ def message_reply(message):
                 filter(User.tg_id == message.chat.id).first()
             if user:
                 # Создание нового объекта RuWord
-                if session.query(RuWord).filter(RuWord.title==text[0]).first():
-                obj = RuWord(title=text[0], true_translate=text[1])
-                # Добавление объекта RuWord в сессию
-                session.add(obj)  # Здесь добавляем сам объект, а не его id
-                # Добавление нового слова в отношение words пользователя
-                user.words.append(obj)
-                # Фиксация изменений
-                try:
-                    session.commit()
-                except Exception as e:
-                    print(f"Ошибка при сохранении данных: {e}")
-                    session.rollback()  # Откат изменений в случае ошибки
-                    print("Данные успешно добавлены.")
+                if not session.query(RuWord).filter(RuWord.title == text[0]).first():
+                    obj = RuWord(title=text[0], true_translate=text[1])
+                    # Добавление объекта RuWord в сессию
+                    session.add(obj)  # Здесь добавляем сам объект
+                    # Добавление нового слова в отношение words пользователя
+                    user.words.append(obj)
+                    # Фиксация изменений
+                    try:
+                        session.commit()
+                    except Exception as e:
+                        print(f"Ошибка при сохранении данных: {e}")
+                        session.rollback()  # Откат изменений в случае ошибки
+                        print("Данные успешно добавлены.")
             else:
                 print("Пользователь не найден.")
             data.clear()
